@@ -170,9 +170,8 @@ Hay que crear un archivo con la información y luego se importa
 Comando:
 <pre>
 curl -X POST -H 'Content-Type: application/rdf+xml' 'http://{graphdb-url}/repositories/{repository-id}/statements' -d @wine.rdf
-<pre>
-Hay que crear un *.ttl con la información y luego se importa
 </pre>
+Hay que crear un *.ttl con la información y luego se importa
 ### Extensión *.ttl:
 Contenido del ttl:
 ```
