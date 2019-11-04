@@ -1,0 +1,391 @@
+## CREAR UN CLUSTER LOCAL
+
+Comando:
+<pre>
+curl -X PUT {master1-url}/rest/locations  -H 'Content-Type:application/json'  -d '{  "uri": "{remote-location-url}" }'
+</pre>	
+Ejemplo:
+<pre>
+curl -X PUT http://yval48k0:7200/rest/locations -H 'Content-Type:application/json' -d '{ "uri": "{http://yval4890:7200}"}'
+</pre>
+## CREAR UN MASTER
+
+* Metemos una configuración que nos hemos descargado anteriormente y la ponemos en /users/graphdb/conf/master1-config.ttl
+
+cat master1-config.ttl
+```
+#
+# Sesame configuration template for a GraphDB EE master repository
+#
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
+@prefix rep: <http://www.openrdf.org/config/repository#>.
+@prefix sr: <http://www.openrdf.org/config/repository/sail#>.
+@prefix sail: <http://www.openrdf.org/config/sail#>.
+@prefix owlim: <http://www.ontotext.com/trree/owlim#>.
+
+[] a rep:Repository ;
+    rep:repositoryID "master1" ;
+    rdfs:label "my master repository" ;
+    rep:repositoryImpl [
+        rep:repositoryType "owlim:ReplicationCluster" ;
+    ].
+
+```
+Comando:
+<pre>
+curl -X POST {master1-url}/rest/repositories -H 'Content-Type: multipart/form-data' -F "config=@master1-config.ttl"
+</pre>
+Ejemplo:
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/master1-config.ttl"
+</pre>
+Nota: 
+Por defecto este master (el primero que creamos) se crea como write-read.
+Si creamos un segundo deberá ser read-only o muted.
+
+
+## TOPOLOGÍA BÁSICA: EJEMPLO 1
+
+
+### CREAR WORKER 1
+
+Metemos una configuración que nos hemos descargado anteriormente y la ponemos en /users/graphdb/conf/worker1-config.ttl
+
+<pre>
+cat worker1-config.ttl
+#
+# Sesame configuration template for a GraphDB EE worker repository
+#
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
+@prefix rep: <http://www.openrdf.org/config/repository#>.
+@prefix sr: <http://www.openrdf.org/config/repository/sail#>.
+@prefix sail: <http://www.openrdf.org/config/sail#>.
+@prefix owlim: <http://www.ontotext.com/trree/owlim#>.
+
+[] a rep:Repository ;
+    rep:repositoryID "worker1" ;
+    rdfs:label "my worker number one" ;
+    rep:repositoryImpl [
+        rep:repositoryType "owlim:ReplicationClusterWorker" ;
+        rep:delegate [
+            rep:repositoryType "owlim:MonitorRepository" ;
+            sr:sailImpl [
+                sail:sailType "owlimClusterWorker:Sail" ;
+
+              ….
+</pre>
+Comando:
+<pre>
+curl -X POST {master1-url}/rest/repositories?location={worker1-url} -H 'Content-Type: multipart/form-data' -F "config=@worker1-config.ttl"
+</pre>
+Ejemplo:
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories?location=http://yval48m0:7200 -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/worker1-config.ttl"
+</pre>
+### CREAR WORKER 2
+
+Metemos una configuración que nos hemos descargado anteriormente y la ponemos en /users/graphdb/conf/worker2-config.ttl
+
+Comando:
+<pre>
+curl -X POST {master1-url}/rest/repositories?location={worker2-url} -H 'Content-Type: multipart/form-data' -F "config=@worker2-config.ttl"
+</pre>
+Ejemplo:
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories?location=http://yval4890:7200 -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/worker2-config.ttl"
+</pre>
+```
+#
+# Sesame configuration template for a GraphDB EE worker repository
+#
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
+@prefix rep: <http://www.openrdf.org/config/repository#>.
+@prefix sr: <http://www.openrdf.org/config/repository/sail#>.
+@prefix sail: <http://www.openrdf.org/config/sail#>.
+@prefix owlim: <http://www.ontotext.com/trree/owlim#>.
+
+[] a rep:Repository ;
+    rep:repositoryID "worker2" ;
+    rdfs:label "my worker number two" ;
+    rep:repositoryImpl [
+        rep:repositoryType "owlim:ReplicationClusterWorker" ;
+        rep:delegate [
+            rep:repositoryType "owlim:MonitorRepository" ;
+            sr:sailImpl [
+                sail:sailType "owlimClusterWorker:Sail" ;
+                owlim:owlim-license "" ;
+…
+
+```
+### CONECTAR LOS WORKERS CON EL MASTER
+
+Comandos:
+
+Conectamos Worker1 al Master1:
+<pre>
+curl -X POST {master1-url}/rest/cluster/masters/master1/workers  -H 'Content-Type: application/json'  -d '{
+        "workerURL": "{worker1-url}/repositories/worker1", "masterLocation": "local" }'
+</pre>
+Conectamos Worker2 al Master1:
+<pre>
+curl -X POST {master1-url}/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{
+        "workerURL": "{worker2-url}/repositories/worker2", "masterLocation": "local" }'
+
+</pre>
+Ejemplos:
+
+Conectamos Worker1 al Master1:
+<pre>
+curl -X POST http://yval48k0:7200/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{ "workerURL": "http://yval48m0:7200/repositories/worker1", "masterLocation": "local" }'
+</pre>
+Conectamos Worker2 al Master1:
+<pre>
+curl -X POST http://yval48k0:7200/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{ "workerURL": "http://yval4890:7200/repositories/worker2", "masterLocation": "local"}'
+</pre>
+
+## TOPOLOGÍA INTERMEDIA: EJEMPLO 2
+
+### CREAMOS MASTER 1
+Metemos una configuración que nos hemos descargado anteriormente y la ponemos en /users/graphdb/conf/master1-config.ttl
+
+Comando:
+<pre>
+curl -X POST {master1-url}/rest/repositories -H 'Content-Type: multipart/form-data' -F "config=@master1-config.ttl"
+</pre>
+Ejemplo:
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/master1-config.ttl"
+</pre>
+### CREAMOS MASTER 2
+Metemos una configuración que nos hemos descargado anteriormente y la ponemos en /users/graphdb/conf/master2-config.ttl
+
+Comando: 
+<pre>
+curl -X POST {master1-url}/rest/repositories -H 'Content-Type: multipart/form-data' -F "config=@master2-config.ttl"
+</pre>
+Ejemplo: 
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories?location=http://yval48m0:7200 -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/master2-config.ttl"
+</pre>
+### CREAMOS WORKER 1
+Comando:
+<pre>
+curl -X POST {master1-url}/rest/repositories?location={worker1-url} -H 'Content-Type: multipart/form-data' -F "config=@worker1-config.ttl"
+</pre>
+Ejemplo:
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories?location=http://yval48m0:7200 -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/worker1-config.ttl"
+</pre>
+### CREAMOS WORKER 2
+Comando:
+<pre>
+curl -X POST {master2-url}/rest/repositories?location={worker1-url} -H 'Content-Type: multipart/form-data' -F "config=@worker2-config.ttl"
+</pre>
+Ejemplo:
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories?location=http://yval4890:7200 -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/worker2-config.ttl"
+</pre>
+### CREAR WORKER 3
+Comando:
+<pre>
+curl -X POST {master1-url}/rest/repositories?location={worker3-url} -H 'Content-Type: multipart/form-data' -F "config=@worker3-config.ttl"
+</pre>
+Ejemplo:
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories?location=http://yval4890:7200 -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/worker3-config.ttl"
+</pre>
+### CONECTAMOS LOS MASTERS BIDIRECCIONALMENTE
+
+Comando: 
+<pre>
+curl -X POST -H 'Content-Type: application/json' -d '{ "bidirectional": true, "masterLocation": "local", "masterNodeID": "master1", "peerLocation": "{master2-url}", "peerNodeID": "master2", "peerRepositoryID": "master2" }' '{master1-url}/rest/cluster/masters/master1/peers'
+</pre>
+Ejemplo: 
+<pre>
+curl -X POST -H 'Content-Type: application/json' -d '{ "bidirectional": true, "masterLocation": "local", "masterNodeID": "master1", "peerLocation": "http://yval48m0:7200", "peerNodeID": "master2", "peerRepositoryID": "master2" }' '{http://yval48k0:7200}/rest/cluster/masters/master1/peers'
+</pre>
+### CONECTAR LOS WORKERS CON EL MASTER
+
+Comandos:
+
+Conectamos Worker1 al Master1:
+<pre>
+curl -X POST {master1-url}/rest/cluster/masters/master1/workers  -H 'Content-Type: application/json'  -d '{
+        "workerURL": "{worker1-url}/repositories/worker1", "masterLocation": "local" }'
+</pre>
+Conectamos Worker2 al Master1:
+<pre>
+curl -X POST {master1-url}/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{
+        "workerURL": "{worker2-url}/repositories/worker2", "masterLocation": "local" }'
+</pre>
+Conectamos Worker3 al Master2:
+<pre>
+curl -X POST {master2-url}/rest/cluster/masters/master1/workers  -H 'Content-Type: application/json'  -d '{
+        "workerURL": "{worker3-url}/repositories/worker1", "masterLocation": "local" }'
+</pre>
+Conectamos Worker4 al Master2:
+<pre>
+curl -X POST {master2-url}/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{
+        "workerURL": "{worker4-url}/repositories/worker2", "masterLocation": "local" }'
+</pre>
+Ejemplos:
+Conectamos Worker1 al Master1:
+
+<pre>
+curl -X POST http://yval48k0:7200/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{ "workerURL": "http://yval48m0:7200/repositories/worker1", "masterLocation": "local" }'
+</pre>
+Conectamos Worker1 al Master2:
+<pre>
+curl -X POST http://yval48m0:7200/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{ "workerURL": "http://yval48m0:7200/repositories/worker1", "masterLocation": "local" }'
+</pre>
+Conectamos Worker2 al Master1:
+<pre>
+curl -X POST http://yval48k0:7200/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{ "workerURL": "http://yval4890:7200/repositories/worker2", "masterLocation": "local"}'
+</pre>
+Conectamos Worker2 al Master2:
+<pre>
+curl -X POST http://yval48m0:7200/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{ "workerURL": "http://yval4890:7200/repositories/worker2", "masterLocation": "local"}'
+</pre>
+Conectamos Worker3 al Master1:
+<pre>
+curl -X POST http://yval48k0:7200/rest/cluster/masters/master2/workers -H 'Content-Type: application/json' -d '{ "workerURL": "http://yval4890:7200/repositories/worker3", "masterLocation": "local" }'
+</pre>
+Conectamos Worker3 al Master2:
+<pre>
+curl -X POST http://yval48m0:7200/rest/cluster/masters/master2/workers -H 'Content-Type: application/json' -d '{ "workerURL": "http://yval4890:7200/repositories/worker3", "masterLocation": "local" }'
+</pre>
+### CONFIGURAR MASTER2 COMO SOLO LECTURA
+
+Comando: 
+<pre>
+curl -X POST -H 'Content-Type: application/json' -d '{"ReadOnly":true}' '{master1-url}/rest/cluster/masters/master2?masterLocation={master2-url}'
+</pre>
+Ejemplo:
+<pre>
+curl -X POST -H 'Content-Type: application/json' -d '{"ReadOnly":true}' 'http://yval48k0:7200/rest/cluster/masters/master2?masterLocation=http://yval48m0:7200'
+</pre>
+
+## TOPOLOGÍA AVANZADA: EJEMPLO 3
+
+### CREAMOS MASTER 1
+Metemos una configuración que nos hemos descargado anteriormente y la ponemos en /users/graphdb/conf/master1-config.ttl
+
+Comando:
+<pre>
+curl -X POST {master1-url}/rest/repositories -H 'Content-Type: multipart/form-data' -F "config=@master1-config.ttl"
+</pre>
+Ejemplo:
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/master1-config.ttl"
+</pre>
+CREAMOS MASTER 2
+<pre>
+Metemos una configuración que nos hemos descargado anteriormente y la ponemos en /users/graphdb/conf/master2-config.ttl
+</pre>
+Comando: 
+<pre>
+curl -X POST {master1-url}/rest/repositories -H 'Content-Type: multipart/form-data' -F "config=@master2-config.ttl"
+</pre>
+Ejemplo: 
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories?location=http://yval48m0:7200 -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/master2-config.ttl"
+</pre>
+### CREAMOS WORKER 1
+Comando:
+<pre>
+curl -X POST {master1-url}/rest/repositories?location={worker1-url} -H 'Content-Type: multipart/form-data' -F "config=@worker1-config.ttl"
+</pre>
+Ejemplo:
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories?location=http://yval48m0:7200 -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/worker1-config.ttl"
+</pre>
+### CREAMOS WORKER 2
+Comando:
+<pre>
+curl -X POST {master2-url}/rest/repositories?location={worker1-url} -H 'Content-Type: multipart/form-data' -F "config=@worker2-config.ttl"
+</pre>
+Ejemplo:
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories?location=http://yval4890:7200 -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/worker2-config.ttl"
+</pre>
+
+### CREAR WORKER 3
+Comando:
+<pre>
+curl -X POST {master1-url}/rest/repositories?location={worker3-url} -H 'Content-Type: multipart/form-data' -F "config=@worker3-config.ttl"
+</pre>
+Ejemplo:
+<pre>
+curl -X POST http://yval48k0:7200/rest/repositories?location=http://yval4890:7200 -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/worker3-config.ttl"
+</pre>
+### CREAR WORKER 4
+Comando:
+<pre>
+curl -X POST {master1-url}/rest/repositories?location={worker4-url} -H 'Content-Type: multipart/form-data' -F "config=@worker4-config.ttl"
+</pre>
+Ejemplo:
+<pre>
+curl -X POST http://yval48m0:7200/rest/repositories -H 'Content-Type: multipart/form-data' -F "config=@/users/graphdb/conf/worker4-config.ttl"
+</pre>
+### CONECTAMOS LOS MASTERS BIDIRECCIONALMENTE
+
+Comando: 
+<pre>
+curl -X POST -H 'Content-Type: application/json' -d '{ "bidirectional": true, "masterLocation": "local", "masterNodeID": "master1", "peerLocation": "{master2-url}", "peerNodeID": "master2", "peerRepositoryID": "master2" }' '{master1-url}/rest/cluster/masters/master1/peers'
+</pre>
+Ejemplo: 
+<pre>
+curl -X POST -H 'Content-Type: application/json' -d '{ "bidirectional": true, "masterLocation": "local", "masterNodeID": "master1", "peerLocation": "http://yval48m0:7200", "peerNodeID": "master2", "peerRepositoryID": "master2" }' '{http://yval48k0:7200}/rest/cluster/masters/master1/peers'
+</pre>
+
+### CONECTAR LOS WORKERS CON EL MASTER
+
+Comandos:
+
+Conectamos Worker1 al Master1:
+<pre>
+curl -X POST {master1-url}/rest/cluster/masters/master1/workers  -H 'Content-Type: application/json'  -d '{
+        "workerURL": "{worker1-url}/repositories/worker1", "masterLocation": "local" }'
+</pre>
+Conectamos Worker2 al Master1:
+<pre>
+curl -X POST {master1-url}/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{
+        "workerURL": "{worker2-url}/repositories/worker2", "masterLocation": "local" }'
+</pre>
+Conectamos Worker3 al Master2:
+<pre>
+curl -X POST {master2-url}/rest/cluster/masters/master1/workers  -H 'Content-Type: application/json'  -d '{
+        "workerURL": "{worker3-url}/repositories/worker1", "masterLocation": "local" }'
+</pre>
+Conectamos Worker4 al Master2:
+<pre>
+curl -X POST {master2-url}/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{
+        "workerURL": "{worker4-url}/repositories/worker2", "masterLocation": "local" }'
+</pre>
+Ejemplos:
+Conectamos Worker1 al Master1:
+<pre>
+curl -X POST http://yval48k0:7200/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{ "workerURL": "http://yval48m0:7200/repositories/worker1", "masterLocation": "local" }'
+</pre>
+Conectamos Worker2 al Master1:
+<pre>
+curl -X POST http://yval48k0:7200/rest/cluster/masters/master1/workers -H 'Content-Type: application/json' -d '{ "workerURL": "http://yval4890:7200/repositories/worker2", "masterLocation": "local"}'
+</pre>
+Conectamos Worker3 al Master2:
+<pre>
+curl -X POST http://yval48m0:7200/rest/cluster/masters/master2/workers -H 'Content-Type: application/json' -d '{ "workerURL": "http://yval4890:7200/repositories/worker3", "masterLocation": "local" }'
+</pre>
+Conectamos Worker4 al Master2:
+<pre>
+curl -X POST http://yval48m0:7200/rest/cluster/masters/master2/workers -H 'Content-Type: application/json' -d '{ "workerURL": "http://yval48m0:7200/repositories/worker4", "masterLocation": "local" }'
+</pre>
+### CONFIGURAR EL MASTER2 COMO MUTE:
+
+Comando:
+<pre>
+curl -X POST -H 'Content-Type: application/json' -d '{"Mode":"MUTE"}' '{master1-url}/rest/cluster/masters/master2?masterLocation={master2-url}'
+</pre>
+Ejemplo: 
+<pre>
+curl -X POST -H 'Content-Type: application/json' -d '{"Mode":"MUTE"}' 'http://yval48k0:7200/rest/cluster/masters/master2?masterLocation=http://yval48m0:7200'
+</pre>
